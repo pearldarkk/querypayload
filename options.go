@@ -5,3 +5,4 @@ type options struct {
 	Page                 int
 	Headers              []string
 }
+

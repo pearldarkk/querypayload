@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"regexp"
 	"sync"
 
@@ -9,32 +8,26 @@ import (
 )
 
 func queryProcessor(proxies []string, queries []string, uris map[string]string, engine string, page int, headers []string) (string, error) {
-	var sus string
-	var wg sync.WaitGroup
-	proxiesMutex := sync.Mutex{}
-	activeProxies := make(map[string]bool)
-
-	for _, proxy := range proxies {
-		activeProxies[proxy] = true
+	type queryResult struct {
+		dork string
+		sus  string
+		err  error
 	}
 
+	resultChan := make(chan queryResult, len(queries))
+	proxyChan := make(chan string, len(proxies))
+
+	for _, proxy := range proxies {
+		proxyChan <- proxy
+	}
+
+	var wg sync.WaitGroup
 	for _, q := range queries {
 		wg.Add(1)
 		go func(dork string) {
 			defer wg.Done()
-			var proxyToUse string
 
-			proxiesMutex.Lock()
-			for proxy := range activeProxies {
-				proxyToUse = proxy
-				break
-			}
-			proxiesMutex.Unlock()
-
-			if proxyToUse == "" {
-				log.Fatal().Msgf("No active proxies available")
-				os.Exit(2)
-			}
+			proxyToUse := <-proxyChan
 
 			opts := options{
 				Query:   dork,
@@ -46,22 +39,40 @@ func queryProcessor(proxies []string, queries []string, uris map[string]string, 
 
 			res, err := opts.getSearchResult()
 			if err != nil {
-				proxiesMutex.Lock()
-				delete(activeProxies, proxyToUse)
-				proxiesMutex.Unlock()
-			} else {
-				sus, err = checkPayload(res)
-				if err != nil {
-					log.Fatal().Msgf("Error checking payload: %v\n", err)
-				} else {
-					uris[dork] = sus
-				}
+				log.Error().Msgf("Failed to get search result with proxy %s: %v\n", proxyToUse, err)
+				resultChan <- queryResult{dork: dork, err: err}
+				proxyChan <- proxyToUse
+				return
 			}
+
+			result, err := checkPayload(res)
+			if err != nil {
+				log.Error().Msgf("Error checking payload: %v\n", err)
+				resultChan <- queryResult{dork: dork, err: err}
+				proxyChan <- proxyToUse
+				return
+			}
+
+			resultChan <- queryResult{dork: dork, sus: result}
+			proxyChan <- proxyToUse
 		}(q)
 	}
 
 	wg.Wait()
-	return sus, nil
+	close(resultChan)
+
+	var finalSus string
+	for res := range resultChan {
+		if res.err != nil {
+			continue
+		}
+		uris[res.dork] = res.sus
+		if finalSus == "" {
+			finalSus = res.sus
+		}
+	}
+
+	return finalSus, nil
 }
 
 func checkPayload(urls []string) (string, error) {

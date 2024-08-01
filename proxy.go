@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
+	log "github.com/projectdiscovery/gologger"
 )
 
 var ProxyFetch = struct {
@@ -34,29 +34,30 @@ var ProxyFetch = struct {
 	},
 }
 
-func fetchProxies(url string, wg *sync.WaitGroup, proxiesChan chan<- string) {
+func fetchProxies(url string, wg *sync.WaitGroup, protocol string, proxiesChan chan<- string) {
 	defer wg.Done()
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Printf("Failed to fetch %s: %v\n", url, err)
+		log.Info().Msgf("Failed to fetch %s: %v\n", url, err)
 		return
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Failed to read response body from %s: %v\n", url, err)
+		log.Info().Msgf("Failed to read response body from %s: %v\n", url, err)
 		return
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(string(body)))
 	for scanner.Scan() {
-		proxiesChan <- scanner.Text()
+		proxy := scanner.Text()
+		proxiesChan <- protocol + "://" + proxy
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading proxy list from %s: %v\n", url, err)
+		log.Info().Msgf("Error reading proxy list from %s: %v\n", url, err)
 	}
 }
 
@@ -72,7 +73,7 @@ func fetchUniqueProxies() []string {
 				continue
 			}
 			wg.Add(1)
-			go fetchProxies(url, &wg, proxiesChan)
+			go fetchProxies(url, &wg, proto, proxiesChan)
 		}
 	}
 

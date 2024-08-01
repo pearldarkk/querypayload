@@ -19,12 +19,10 @@ func (opt *options) get(url string) string {
 	}
 	isError(err)
 
-	if opt.Proxy != "" {
-		client.Transport, err = mubeng.Transport(opt.Proxy)
-		isError(err)
+	client.Transport, err = mubeng.Transport(opt.Proxy)
+	isError(err)
 
-		req.Header.Add("Connection", "close")
-	}
+	req.Header.Add("Connection", "close")
 
 	resp, err := client.Do(req)
 	isError(err)

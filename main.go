@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -15,10 +16,10 @@ import (
 )
 
 type Config struct {
-	engine       string `json:"engine"`
+	Engine       string `json:"engine"`
 	Page         int    `json:"page"`
-	FilterStatus string `json:"filterStatus"`
-	FilterTime   string `json:"filterTime"`
+	FilterStatus bool   `json:"filterStatus"`
+	FilterTime   bool   `json:"filterTime"`
 	FromTime     string `json:"fromTime"`
 	ToTime       string `json:"toTime"`
 	TimePattern  string `json:"timePattern"`
@@ -92,9 +93,13 @@ func main() {
 		log.Fatal().Msgf("Failed to parse config.json: %v\n", err)
 	}
 
+	log.Info().Msgf("Filtering URI...")
+	log.Info().Msgf("Status Filtering: %s", strconv.FormatBool(config.FilterStatus))
+	if config.FilterTime {
+		log.Info().Msgf("Time Filtering: %s - %s", config.FromTime, config.ToTime)
+	}
 	uriMap := make(map[string]int)
-
-	err = parseAccess(config, uriMap)
+	err = readAccess(config, uriMap)
 	if err != nil {
 		log.Fatal().Msgf("Error filtering URIs and status codes: %v\n", err)
 	}
@@ -116,28 +121,36 @@ func main() {
 	for uri, count := range uriMap {
 		record := []string{uri, fmt.Sprintf("%d", count)}
 		if err := writer.Write(record); err != nil {
-			log.Fatal().Msgf("failed to write record to CSV: %v", err)
+			log.Fatal().Msgf("Failed to write record to CSV: %v", err)
 		}
 	}
 	queries := make([]string, 0, len(uriMap))
 	for uri := range uriMap {
-		queries = append(queries, fmt.Sprintf("allintext: %s cve-", uri))
+		// decode URI
+		decodedURI, err := url.QueryUnescape(uri)
+		if err != nil {
+			// log.Error().Msgf("Failed to decode URI %s: %v\n", uri, err)
+			queries = append(queries, fmt.Sprintf("allintext: %s cve-", uri))
+			continue
+		}
+		queries = append(queries, fmt.Sprintf("allintext: %s cve-", decodedURI))
 
 	}
 	uris := make(map[string]string)
 	for uri := range uriMap {
 		uris[uri] = ""
 	}
-	log.Info().Msgf("Start Querying...")
-	log.Info().Msgf("Number of queries: %+v", len(uris))
-	log.Info().Msgf("Page to get result : %s", strconv.Itoa(page))
-
+	log.Info().Msgf("Fetching Proxies...")
 	proxies := fetchUniqueProxies()
 	if len(proxies) <= 0 {
 		log.Warning().Msg("No proxy found!")
 		os.Exit(2)
-	} else {
-		log.Info().Msgf("%d proxies found!", len(proxies))
-		queryProcessor(proxies, queries, uris, engine, page, headers)
 	}
+	log.Info().Msgf("%d proxies found!", len(proxies))
+
+	log.Info().Msgf("Querying URI...")
+	log.Info().Msgf("Number of queries: %+v", len(uris))
+	log.Info().Msgf("Page to get result: %s", strconv.Itoa(page))
+
+	queryProcessor(proxies, queries, uris, engine, page, headers)
 }

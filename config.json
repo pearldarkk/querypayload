@@ -1,10 +1,10 @@
 {
     "engine": "google",
     "page": 1,
-    "filterStatus": "True",
-    "filterTime": "True",
+    "filterStatus": true,
+    "filterTime": true,
     "fromTime": "2020-01",
-    "toTime": "2022-02-4 15:06:17",
+    "toTime": "2025-02-04 15:06:17",
     "timePattern": "(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})",
-    "logPattern": "\\W3SVC818787853\\*\\.log"
+    "logPattern": "log/*.log"
 }
