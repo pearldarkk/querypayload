@@ -2,11 +2,12 @@ package main
 
 import (
 	"bufio"
+	log "github.com/projectdiscovery/gologger"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
-	log "github.com/projectdiscovery/gologger"
 )
 
 var ProxyFetch = struct {
@@ -53,9 +54,15 @@ func fetchProxies(url string, wg *sync.WaitGroup, protocol string, proxiesChan c
 	scanner := bufio.NewScanner(strings.NewReader(string(body)))
 	for scanner.Scan() {
 		proxy := scanner.Text()
-		proxiesChan <- protocol + "://" + proxy
-	}
+		rgx, _ := regexp.Compile("([\\d.]+:\\d+):")
+		proxyMatches := rgx.FindStringSubmatch(proxy)
 
+		if len(proxyMatches) > 0 {
+			proxiesChan <- protocol + "://" + proxyMatches[1]
+		} else {
+			proxiesChan <- protocol + "://" + proxy
+		}
+	}
 	if err := scanner.Err(); err != nil {
 		log.Info().Msgf("Error reading proxy list from %s: %v\n", url, err)
 	}

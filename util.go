@@ -3,21 +3,20 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net/url"
+	urllib "net/url"
 	"os"
 	"strconv"
 
 	"github.com/logrusorgru/aurora/v3"
-	log "github.com/projectdiscovery/gologger"
 )
 
 func isURL(s string) bool {
-	_, e := url.ParseRequestURI(s)
+	_, e := urllib.ParseRequestURI(s)
 	if e != nil {
 		return false
 	}
 
-	u, e := url.Parse(s)
+	u, e := urllib.Parse(s)
 	if e != nil || u.Scheme == "" || u.Host == "" {
 		return false
 	}
@@ -25,18 +24,12 @@ func isURL(s string) bool {
 	return true
 }
 
-func isError(e error) {
-	if e != nil {
-		log.Info().Msgf("%s\n", e)
-	}
-}
-
 func showBanner() {
 	fmt.Fprintf(os.Stderr, "%s\n", aurora.Cyan(banner))
 }
 
 func (opt *options) getSearchResult() ([]string, error) {
-	queryEsc := url.QueryEscape(opt.Query)
+	queryEsc := urllib.QueryEscape(opt.Query)
 	var regexes, baseURL, params string
 	var res []string
 
@@ -50,28 +43,28 @@ func (opt *options) getSearchResult() ([]string, error) {
 		baseURL = "https://www.shodan.io/search"
 		params = ("query=" + queryEsc + "&page=")
 	default:
-		return nil, errors.New("engine not found! Please choose one available")
+		return nil, errors.New("unknown engine " + opt.Engine)
 	}
 
 iterPage:
 	for p := 1; p <= opt.Page; p++ {
 		page := strconv.Itoa(p)
-
-		scrape := opt.get(baseURL + "?" + params + page)
+		page += "0"
+		scrape, err := opt.get(baseURL + "?" + params + page)
+		if err != nil {
+			return nil, err
+		}
 		result := parser(scrape, regexes)
 		for i := range result {
-			url, err := url.QueryUnescape(result[i][1])
+			url, err := urllib.QueryUnescape(result[i][1])
 			if err != nil {
-				return nil, fmt.Errorf("when querying '%s' on page %d", queryEsc, p)
+				return nil, err
 			}
-
 			if !isURL(url) {
 				break iterPage
 			}
-
 			res = append(res, url)
 		}
 	}
-
 	return res, nil
 }
