@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -98,59 +96,74 @@ func main() {
 	if config.FilterTime {
 		log.Info().Msgf("Time Filtering: %s - %s", config.FromTime, config.ToTime)
 	}
-	uriMap := make(map[string]int)
+	uriMap := make(map[uridat]int)
 	err = readAccess(config, uriMap)
 	if err != nil {
 		log.Fatal().Msgf("Error filtering URIs and status codes: %v\n", err)
 	}
 
-	outputFile := "filtered_uris.csv"
-	file, err := os.Create(outputFile)
-	if err != nil {
-		log.Fatal().Msgf("Failed to create output file: %v\n", err)
-	}
-	defer file.Close()
+	gets := make(map[uridat]int)
+	posts := make(map[uridat]int)
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	if err := writer.Write([]string{"URI", "Cnt"}); err != nil {
-		log.Fatal().Msgf("Failed to write header to CSV: %v\n", err)
-	}
-
-	for uri, count := range uriMap {
-		record := []string{uri, fmt.Sprintf("%d", count)}
-		if err := writer.Write(record); err != nil {
-			log.Fatal().Msgf("Failed to write record to CSV: %v", err)
+	for d, c := range uriMap {
+		if d.method == "GET" {
+			gets[d] = c
+		} else if d.method == "POST" {
+			posts[d] = c
 		}
 	}
-	queries := make([]string, 0, len(uriMap))
-	for uri := range uriMap {
-		// decode URI
-		decodedURI, err := url.QueryUnescape(uri)
-		if err != nil {
-			// log.Error().Msgf("Failed to decode URI %s: %v\n", uri, err)
-			queries = append(queries, fmt.Sprintf("allintext: %s cve-", uri))
-			continue
-		}
-		queries = append(queries, fmt.Sprintf("allintext: %s cve-", decodedURI))
+	outURI("merge_uris.csv", uriMap)
+	outURI("get_uris.csv", gets)
+	outURI("post_uris.csv", posts)
 
-	}
-	uris := make(map[string]string)
-	for uri := range uriMap {
-		uris[uri] = ""
-	}
-	log.Info().Msgf("Fetching Proxies...")
-	proxies := fetchUniqueProxies()
-	if len(proxies) <= 0 {
-		log.Warning().Msg("No proxy found!")
-		os.Exit(2)
-	}
-	log.Info().Msgf("%d proxies found!", len(proxies))
+	//outputFile := "filtered_uris.csv"
+	//file, err := os.Create(outputFile)
+	//if err != nil {
+	//	log.Fatal().Msgf("Failed to create output file: %v\n", err)
+	//}
+	//defer file.Close()
+	//
+	//writer := csv.NewWriter(file)
+	//defer writer.Flush()
+	//
+	//if err := writer.Write([]string{"URI", "Cnt"}); err != nil {
+	//	log.Fatal().Msgf("Failed to write header to CSV: %v\n", err)
+	//}
+	//
+	//for uri, count := range uriMap {
+	//	record := []string{uri, fmt.Sprintf("%d", count)}
+	//	if err := writer.Write(record); err != nil {
+	//		log.Fatal().Msgf("Failed to write record to CSV: %v", err)
+	//	}
+	//}
+	//queries := make([]string, 0, len(uriMap))
+	//for uri := range uriMap {
+	//	// decode URI
+	//	decodedURI, err := url.QueryUnescape(uri)
+	//	if err != nil {
+	//		// log.Error().Msgf("Failed to decode URI %s: %v\n", uri, err)
+	//		queries = append(queries, fmt.Sprintf("allintext: %s cve-", uri))
+	//		continue
+	//	}
+	//	queries = append(queries, fmt.Sprintf("allintext: %s cve-", decodedURI))
+	//
+	//}
+	//uris := make(map[string]string)
+	//for uri := range uriMap {
+	//	uris[uri] = ""
+	//}
 
-	log.Info().Msgf("Querying URI...")
-	log.Info().Msgf("Number of queries: %+v", len(uris))
-	log.Info().Msgf("Page to get result: %s", strconv.Itoa(page))
-
-	queryProcessor(proxies, queries, uris, engine, page, headers)
+	//log.Info().Msgf("Fetching Proxies...")
+	//proxies := fetchUniqueProxies()
+	//if len(proxies) <= 0 {
+	//	log.Warning().Msg("No proxy found!")
+	//	os.Exit(2)
+	//}
+	//log.Info().Msgf("%d proxies found!", len(proxies))
+	//
+	//log.Info().Msgf("Querying URI...")
+	//log.Info().Msgf("Number of queries: %+v", len(uris))
+	//log.Info().Msgf("Page to get result: %s", strconv.Itoa(page))
+	//
+	//queryProcessor(proxies, queries, uris, engine, page, headers)
 }

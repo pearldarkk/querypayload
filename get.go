@@ -43,7 +43,7 @@ func (opt *options) get(url string) (string, error) {
 		Transport: transport,
 		Timeout:   10 * time.Second}
 
-	//req.Header.Add("User-Agent", "Go-HttpClient")
+	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36")
 	req.Header.Add("Accept", "text/html")
 	req.Header.Add("Connection", "close")
 

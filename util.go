@@ -1,13 +1,12 @@
 package main
 
 import (
-	"errors"
+	"encoding/csv"
 	"fmt"
+	"github.com/logrusorgru/aurora/v3"
+	log "github.com/projectdiscovery/gologger"
 	urllib "net/url"
 	"os"
-	"strconv"
-
-	"github.com/logrusorgru/aurora/v3"
 )
 
 func isURL(s string) bool {
@@ -28,43 +27,21 @@ func showBanner() {
 	fmt.Fprintf(os.Stderr, "%s\n", aurora.Cyan(banner))
 }
 
-func (opt *options) getSearchResult() ([]string, error) {
-	queryEsc := urllib.QueryEscape(opt.Query)
-	var regexes, baseURL, params string
-	var res []string
-
-	switch opt.Engine {
-	case "google":
-		regexes = `"><a href="\/url\?q=(.*?)&amp;sa=U&amp;`
-		baseURL = "https://www.google.com/search"
-		params = ("q=" + queryEsc + "&gws_rd=cr,ssl&client=ubuntu&ie=UTF-8&start=")
-	case "shodan":
-		regexes = `\"><a href=\"/host/(.*?)\">`
-		baseURL = "https://www.shodan.io/search"
-		params = ("query=" + queryEsc + "&page=")
-	default:
-		return nil, errors.New("unknown engine " + opt.Engine)
+func outURI(outFile string, dat map[uridat]int) {
+	file, err := os.Create(outFile)
+	if err != nil {
+		log.Fatal().Msgf("Failed to create output file: %v\n", err)
 	}
-
-iterPage:
-	for p := 1; p <= opt.Page; p++ {
-		page := strconv.Itoa(p)
-		page += "0"
-		scrape, err := opt.get(baseURL + "?" + params + page)
-		if err != nil {
-			return nil, err
-		}
-		result := parser(scrape, regexes)
-		for i := range result {
-			url, err := urllib.QueryUnescape(result[i][1])
-			if err != nil {
-				return nil, err
-			}
-			if !isURL(url) {
-				break iterPage
-			}
-			res = append(res, url)
+	defer file.Close()
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	if err := writer.Write([]string{"URI", "Cnt", "Method"}); err != nil {
+		log.Fatal().Msgf("Failed to write header: %v\n", err)
+	}
+	for d, c := range dat {
+		line := []string{d.method, d.uri, fmt.Sprintf("%d", c)}
+		if err := writer.Write(line); err != nil {
+			log.Fatal().Msgf("Failed to write line: %v\n", err)
 		}
 	}
-	return res, nil
 }

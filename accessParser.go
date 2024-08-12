@@ -10,16 +10,15 @@ import (
 	log "github.com/projectdiscovery/gologger"
 )
 
-func parseAccess(filePath string, config Config, uriMap map[string]int) error {
-	uriPattern := `(?:GET|POST|CONNECT|TUNNEL|HEAD|PUT|DELETE|OPTIONS|TRACE|PATCH)\s([^\;\s]+)`
-	statusPattern := `[\s\t](\d+)[\s\t]\d+[\s\t]`
+func parseAccess(filePath string, config Config, uriMap map[uridat]int) error {
+	methodRegex := regexp.MustCompile(`(?:(GET|POST|CONNECT|TUNNEL|HEAD|PUT|DELETE|OPTIONS|TRACE|PATCH))\s[^\;\s]+`)
+	uriRegex := regexp.MustCompile(`(?:GET|POST|CONNECT|TUNNEL|HEAD|PUT|DELETE|OPTIONS|TRACE|PATCH)\s([^\;\s]+)`)
+	statusRegex := regexp.MustCompile(`[\s\t](\d+)[\s\t]\d+[\s\t]`)
 	timePattern := config.TimePattern
 	if timePattern == "" {
 		timePattern = `(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})`
 	}
-	uriRegex, _ := regexp.Compile(uriPattern)
-	statusRegex, _ := regexp.Compile(statusPattern)
-	timeRegex, _ := regexp.Compile(timePattern)
+	timeRegex := regexp.MustCompile(timePattern)
 
 	// Handle time filtering input
 	var fromTime, toTime time.Time
@@ -71,12 +70,13 @@ func parseAccess(filePath string, config Config, uriMap map[string]int) error {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-
+		methodMatches := methodRegex.FindStringSubmatch(line)
 		uriMatches := uriRegex.FindStringSubmatch(line)
 		statusMatches := statusRegex.FindStringSubmatch(line)
 
 		// if is valid access log
 		if len(uriMatches) > 1 && len(statusMatches) > 1 {
+			methodURI := methodMatches[1]
 			encodedURI := uriMatches[1]
 			statusCode := statusMatches[1]
 
@@ -104,7 +104,11 @@ func parseAccess(filePath string, config Config, uriMap map[string]int) error {
 					}
 				}
 			}
-			uriMap[encodedURI]++
+			ud := uridat{
+				methodURI,
+				encodedURI,
+			}
+			uriMap[ud]++
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -113,7 +117,7 @@ func parseAccess(filePath string, config Config, uriMap map[string]int) error {
 	return nil
 }
 
-func readAccess(config Config, uriMap map[string]int) error {
+func readAccess(config Config, uriMap map[uridat]int) error {
 	if config.LogPattern == "" {
 		config.LogPattern = "*.log"
 	}
